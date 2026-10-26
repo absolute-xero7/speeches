@@ -1,0 +1,4 @@
+.venv/
+vendor/*.tgz
+__pycache__/
+vendor/package/

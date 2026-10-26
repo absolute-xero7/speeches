@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex,nofollow">
+<title>{{TITLE}}</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #171310; color: #ece4d8; }
+  body { font: 17px/1.5 Georgia, serif; }
+  form { max-width: 380px; margin: 0 auto; padding: 22vh 20px 0; display: grid; gap: 12px; }
+  h1 { font-weight: 600; font-size: 28px; margin: 0 0 6px; }
+  input, button { font: inherit; padding: 12px 14px; border-radius: 8px; border: 1px solid #3a3129; }
+  input { background: #1f1a16; color: inherit; }
+  button { background: #2f6b4f; color: #fff; border-color: #2f6b4f; cursor: pointer; }
+  button:disabled { opacity: .6; }
+  #msg { min-height: 1.5em; color: #f0a37c; font-size: 15px; }
+  iframe { position: fixed; inset: 0; width: 100%; height: 100%; border: 0; background: #171310; }
+</style>
+</head>
+<body>
+<form id="lock" autocomplete="off">
+  <h1>{{TITLE}}</h1>
+  <label for="pass">Passphrase</label>
+  <input id="pass" type="password" autocomplete="current-password" required>
+  <button id="go" type="submit">Open</button>
+  <div id="msg" role="status"></div>
+</form>
+<script>{{ARGON2}}</script>
+<script>
+const payload = {{PAYLOAD}};
+const bytes = b64 => Uint8Array.from(atob(b64), c => c.charCodeAt(0));
+
+document.getElementById('lock').addEventListener('submit', async e => {
+  e.preventDefault();
+  const go = document.getElementById('go');
+  const msg = document.getElementById('msg');
+  go.disabled = true;
+  msg.textContent = 'Unlocking…';
+  try {
+    const raw = await hashwasm.argon2id({
+      password: document.getElementById('pass').value,
+      salt: bytes(payload.salt),
+      iterations: payload.kdf.iterations,
+      memorySize: payload.kdf.memorySize,
+      parallelism: payload.kdf.parallelism,
+      hashLength: payload.kdf.hashLength,
+      outputType: 'binary',
+    });
+    const key = await crypto.subtle.importKey('raw', raw, 'AES-GCM', false, ['decrypt']);
+    const plain = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: bytes(payload.nonce) }, key, bytes(payload.data));
+    const frame = document.createElement('iframe');
+    frame.title = document.title;
+    frame.src = URL.createObjectURL(new Blob([plain], { type: 'text/html' }));
+    document.body.replaceChildren(frame);
+  } catch (err) {
+    msg.textContent = "That passphrase didn't work.";
+    go.disabled = false;
+  }
+});
+</script>
+</body>
+</html>
